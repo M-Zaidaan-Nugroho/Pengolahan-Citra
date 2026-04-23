@@ -15,11 +15,14 @@ def hitung_probabilitas_nk(nk, total_piksel):
 
 def hitung_cdf_ekualisasi(pdf):
 
+    # Cumulative Distribution Function (CDF)
     cdf = [0] * len(pdf)
-    cdf[0] = pdf[0]
 
     # CDF yang sudah di ekualisasi
     cdf_eq = [0] * len(pdf)
+
+    cdf[0] = pdf[0]
+    cdf_eq[0] = round(cdf[0] * (len(pdf) - 1))
 
     for i in range(1, len(pdf)):
         cdf[i] = cdf[i - 1] + pdf[i]

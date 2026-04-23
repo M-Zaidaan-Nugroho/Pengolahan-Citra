@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Histogram Specification Interactive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body class="bg-gray-100 p-8 font-sans">
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md">
+      <h1 class="text-2xl font-bold text-center mb-6">
+        Program Histogram Specification (Matching)
+      </h1>
+
+      <form
+        id="uploadForm"
+        class="flex flex-col md:flex-row gap-4 mb-8 justify-center items-end"
+      >
+        <div>
+          <label class="block text-sm font-medium mb-1"
+            >Gambar Input (Yang akan diubah)</label
+          >
+          <input
+            type="file"
+            id="gambar_input"
+            name="gambar_input"
+            accept="image/*"
+            class="border p-2 rounded w-full"
+            required
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1"
+            >Gambar Target (Referensi Histogram)</label
+          >
+          <input
+            type="file"
+            id="gambar_target"
+            name="gambar_target"
+            accept="image/*"
+            class="border p-2 rounded w-full"
+            required
+          />
+        </div>
+        <button
+          type="submit"
+          class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition"
+        >
+          Proses Spesifikasi
+        </button>
+      </form>
+
+      <div id="loading" class="text-center hidden mb-4 text-blue-600 font-bold">
+        Memproses gambar...
+      </div>
+
+      <div id="hasilArea" class="hidden">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="text-center">
+            <h3 class="font-bold mb-2">Citra Input (Grayscale)</h3>
+            <img
+              id="img_in_view"
+              class="max-w-full h-auto mx-auto border mb-4 rounded"
+              alt="Input"
+            />
+            <canvas id="chartInput"></canvas>
+          </div>
+          <div class="text-center">
+            <h3 class="font-bold mb-2">Citra Target (Referensi)</h3>
+            <img
+              id="img_tar_view"
+              class="max-w-full h-auto mx-auto border mb-4 rounded"
+              alt="Target"
+            />
+            <canvas id="chartTarget"></canvas>
+          </div>
+          <div class="text-center">
+            <h3 class="font-bold mb-2 text-green-600">Citra Hasil (Matched)</h3>
+            <img
+              id="img_out_view"
+              class="max-w-full h-auto mx-auto border-2 border-green-500 mb-4 rounded"
+              alt="Output"
+            />
+            <canvas id="chartOutput"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let chartInstances = {}; // Menyimpan instance chart agar bisa di-destroy sebelum digambar ulang
+
+      document
+        .getElementById("uploadForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const formData = new FormData();
+          formData.append(
+            "gambar_input",
+            document.getElementById("gambar_input").files[0],
+          );
+          formData.append(
+            "gambar_target",
+            document.getElementById("gambar_target").files[0],
+          );
+
+          document.getElementById("loading").classList.remove("hidden");
+          document.getElementById("hasilArea").classList.add("hidden");
+
+          try {
+            const response = await fetch("/proses", {
+              method: "POST",
+              body: formData,
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+              // Tampilkan Gambar (Base64)
+              document.getElementById("img_in_view").src =
+                "data:image/png;base64," + data.img_input;
+              document.getElementById("img_tar_view").src =
+                "data:image/png;base64," + data.img_target;
+              document.getElementById("img_out_view").src =
+                "data:image/png;base64," + data.img_output;
+
+              // Render Grafik Histogram Interaktif
+              renderChart(
+                "chartInput",
+                "Histogram Input",
+                data.hist_in,
+                "rgba(54, 162, 235, 0.7)",
+              );
+              renderChart(
+                "chartTarget",
+                "Histogram Target",
+                data.hist_tar,
+                "rgba(255, 159, 64, 0.7)",
+              );
+              renderChart(
+                "chartOutput",
+                "Histogram Hasil",
+                data.hist_out,
+                "rgba(75, 192, 192, 0.7)",
+              );
+
+              document.getElementById("hasilArea").classList.remove("hidden");
+            } else {
+              alert(data.error);
+            }
+          } catch (error) {
+            console.error("Error:", error);
+            alert("Terjadi kesalahan saat memproses gambar.");
+          } finally {
+            document.getElementById("loading").classList.add("hidden");
+          }
+        });
+
+      function renderChart(canvasId, label, dataArray, color) {
+        const ctx = document.getElementById(canvasId).getContext("2d");
+
+        // Hapus chart lama jika ada (agar tidak tumpang tindih)
+        if (chartInstances[canvasId]) {
+          chartInstances[canvasId].destroy();
+        }
+
+        // Label X-Axis (0 sampai 255)
+        const labels = Array.from({ length: 256 }, (_, i) => i);
+
+        chartInstances[canvasId] = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: label,
+                data: dataArray,
+                backgroundColor: color,
+                borderWidth: 0,
+                barPercentage: 1.0,
+                categoryPercentage: 1.0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: { title: { display: true, text: "Level Keabuan (0-255)" } },
+              y: {
+                title: { display: true, text: "Jumlah Piksel" },
+                beginAtZero: true,
+              },
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  title: (tooltipItems) =>
+                    `Level Intensitas: ${tooltipItems[0].label}`,
+                  label: (context) => `Piksel: ${context.raw}`,
+                },
+              },
+            },
+          },
+        });
+      }
+    </script>
+  </body>
+</html>
